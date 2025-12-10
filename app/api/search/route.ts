@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { pipeline, env } from '@xenova/transformers';
 
-env.allowLocalModels = false;
-env.useBrowserCache = false;
-
-// Configuração do Supabase (Substitua pelas suas chaves REAIS aqui ou use variaveis de ambiente)
+// Conexão com Supabase
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.SUPABASE_KEY!;
-
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Configuração da Hugging Face
+const HF_TOKEN = process.env.HF_TOKEN;
+const MODEL_ID = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2";
 
 export async function POST(req: Request) {
   try {
@@ -19,23 +18,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Nenhuma busca informada' }, { status: 400 });
     }
 
-    // 1. Carregar a IA e gerar o vetor da pergunta
-    // Na primeira vez, ele vai baixar o modelo (igual aconteceu no Python)
- const generateEmbedding = await pipeline('feature-extraction', 'Xenova/paraphrase-multilingual-MiniLM-L12-v2');
-    
-    const output = await generateEmbedding(query, {
-      pooling: 'mean',
-      normalize: true,
-    });
+    // 1. Gerar o Vetor usando a API da Hugging Face (Em vez de rodar local)
+    const hfResponse = await fetch(
+      `https://api-inference.huggingface.co/pipeline/feature-extraction/${MODEL_ID}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${HF_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ inputs: query }),
+      }
+    );
 
-    // Converter para array simples de números
-    const embedding = Array.from(output.data);
+    if (!hfResponse.ok) {
+      throw new Error(`Erro na IA: ${hfResponse.statusText}`);
+    }
 
-    // 2. Buscar no Supabase usando a função RPC que criamos no SQL
+    const embedding = await hfResponse.json();
+
+    // 2. Buscar no Supabase (igual antes)
     const { data, error } = await supabase.rpc('buscar_filmes', {
-      query_embedding: embedding, // O vetor da pergunta
-      match_threshold: 0.1,       // Nível de similaridade mínima
-      match_count: 5              // Quantos filmes retornar
+      query_embedding: embedding, 
+      match_threshold: 0.1,
+      match_count: 5
     });
 
     if (error) {

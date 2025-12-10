@@ -9,8 +9,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 // Configuração da Hugging Face
 const HF_TOKEN = process.env.HF_TOKEN;
 
-// Voltamos para o seu modelo original (Multilíngue) que é o melhor
-const MODEL_ID = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2";
+// MUDANÇA: Usando o modelo "Padrão da Indústria" que funciona na rota nova
+const MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2";
 
 export async function POST(req: Request) {
   try {
@@ -20,10 +20,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Nenhuma busca informada' }, { status: 400 });
     }
 
-    // 1. Gerar o Vetor
-    // AQUI ESTÁ O SEGREDO: Usamos 'api-inference' + '/models/' (Essa rota funciona!)
+    // 1. Gerar o Vetor (URL OBRIGATÓRIA 'ROUTER')
     const response = await fetch(
-      `https://api-inference.huggingface.co/models/${MODEL_ID}`,
+      `https://router.huggingface.co/models/${MODEL_ID}`,
       {
         method: "POST",
         headers: {
@@ -34,7 +33,7 @@ export async function POST(req: Request) {
       }
     );
 
-    // LER A RESPOSTA
+    // LER A RESPOSTA COM CUIDADO
     const responseText = await response.text();
     let result;
     
@@ -45,35 +44,20 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: `Erro na API da IA: ${responseText}` }, { status: 500 });
     }
 
-    // 2. TRATAMENTO DE ERROS ESPECÍFICOS DA HUGGING FACE
-    
-    // Erro de Cold Start (IA dormindo)
+    // Tratamento de "Cold Start" (Se a IA estiver dormindo)
     if (result.error && typeof result.error === 'string' && result.error.includes("loading")) {
-        // Retornamos 503 para o Frontend saber que é só esperar
-        return NextResponse.json({ error: 'A IA está acordando... Aguarde 20s e tente de novo.' }, { status: 503 });
+        return NextResponse.json({ error: 'A IA está acordando... Tente novamente em 20 segundos.' }, { status: 503 });
     }
 
-    // Outros erros
+    // Se deu erro na API (Ex: Token inválido ou modelo off)
     if (!response.ok) {
-        console.error("Erro HF:", result);
+        console.error("Erro da Hugging Face:", result);
         throw new Error(`Erro na IA: ${JSON.stringify(result)}`);
     }
 
     // 3. EXTRAÇÃO DO VETOR
-    // A API pode retornar: [0.1, 0.2...] OU [[0.1, 0.2...]] (Vetor dentro de lista)
-    let embedding;
-    if (Array.isArray(result)) {
-        // Se o primeiro item também for um array, pegamos ele (caso de lote)
-        if (Array.isArray(result[0])) {
-            embedding = result[0];
-        } else {
-            // Se for lista de números direto
-            embedding = result;
-        }
-    } else {
-        // Se vier objeto estranho
-        throw new Error("Formato de resposta inesperado da IA");
-    }
+    // A API nova do Router costuma ser mais estável, mas garantimos o formato:
+    const embedding = Array.isArray(result) && Array.isArray(result[0]) ? result[0] : result;
 
     // 4. Buscar no Supabase
     const { data, error } = await supabase.rpc('buscar_filmes', {

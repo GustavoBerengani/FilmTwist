@@ -18,9 +18,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Nenhuma busca informada' }, { status: 400 });
     }
 
-    // 1. Gerar o Vetor (URL CORRIGIDA)
+    // 1. Gerar o Vetor (URL ATUALIZADA PARA ROUTER.HUGGINGFACE.CO)
     const response = await fetch(
-      `https://api-inference.huggingface.co/models/${MODEL_ID}`,
+      `https://router.huggingface.co/models/${MODEL_ID}`,
       {
         method: "POST",
         headers: {
@@ -33,14 +33,14 @@ export async function POST(req: Request) {
 
     const result = await response.json();
 
-    // Tratamento de erro se a IA estiver "iniciando"
-    if (result.error && result.error.includes("loading")) {
-        return NextResponse.json({ error: 'A IA está acordando, tente novamente em 20 segundos.' }, { status: 503 });
+    // Tratamento de erro se a IA estiver "iniciando" (Cold Start)
+    if (result.error && typeof result.error === 'string' && result.error.includes("loading")) {
+        return NextResponse.json({ error: 'A IA está acordando... Tente de novo em 20 segundos.' }, { status: 503 });
     }
 
     if (!response.ok) {
       console.error("Erro HF:", result);
-      throw new Error(`Erro na IA: ${result.error || response.statusText}`);
+      throw new Error(`Erro na IA: ${JSON.stringify(result)}`);
     }
 
     // A API às vezes retorna o vetor dentro de um array extra, garantimos que seja plano

@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { pipeline } from '@xenova/transformers';
+import { pipeline, env } from '@xenova/transformers';
+
+env.allowLocalModels = false;
+env.useBrowserCache = false;
 
 // Configuração do Supabase (Substitua pelas suas chaves REAIS aqui ou use variaveis de ambiente)
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;

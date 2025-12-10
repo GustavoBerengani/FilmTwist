@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Isso avisa o Next.js para não "quebrar" a biblioteca de IA ao subir para a Vercel
-  serverExternalPackages: ['@xenova/transformers'],
+    // AQUI ESTÁ O SEGREDO: Protegemos a biblioteca principal E o motor dela
+    serverExternalPackages: ['@xenova/transformers', 'onnxruntime-node'],
 };
 
 export default nextConfig;

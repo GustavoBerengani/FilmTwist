@@ -18,9 +18,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Nenhuma busca informada' }, { status: 400 });
     }
 
-    // 1. Gerar o Vetor usando a API da Hugging Face (Em vez de rodar local)
-    const hfResponse = await fetch(
-      `https://api-inference.huggingface.co/pipeline/feature-extraction/${MODEL_ID}`,
+    // 1. Gerar o Vetor (URL CORRIGIDA)
+    const response = await fetch(
+      `https://api-inference.huggingface.co/models/${MODEL_ID}`,
       {
         method: "POST",
         headers: {
@@ -31,13 +31,22 @@ export async function POST(req: Request) {
       }
     );
 
-    if (!hfResponse.ok) {
-      throw new Error(`Erro na IA: ${hfResponse.statusText}`);
+    const result = await response.json();
+
+    // Tratamento de erro se a IA estiver "iniciando"
+    if (result.error && result.error.includes("loading")) {
+        return NextResponse.json({ error: 'A IA está acordando, tente novamente em 20 segundos.' }, { status: 503 });
     }
 
-    const embedding = await hfResponse.json();
+    if (!response.ok) {
+      console.error("Erro HF:", result);
+      throw new Error(`Erro na IA: ${result.error || response.statusText}`);
+    }
 
-    // 2. Buscar no Supabase (igual antes)
+    // A API às vezes retorna o vetor dentro de um array extra, garantimos que seja plano
+    const embedding = Array.isArray(result) && Array.isArray(result[0]) ? result[0] : result;
+
+    // 2. Buscar no Supabase
     const { data, error } = await supabase.rpc('buscar_filmes', {
       query_embedding: embedding, 
       match_threshold: 0.1,
@@ -51,8 +60,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ results: data });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Erro interno' }, { status: 500 });
   }
 }
